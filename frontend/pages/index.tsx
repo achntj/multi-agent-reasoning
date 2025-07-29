@@ -1,14 +1,14 @@
 import { useState, FormEvent, ChangeEvent, useEffect } from "react";
 import axios from "axios";
 
+type DebatePart = "optimist" | "pessimist" | "synthesis";
+
 type DebateResponse = {
-  optimist: string;
-  pessimist: string;
-  synthesis: string;
-  context: string;
+  [key in DebatePart]: string;
 };
 
 type ActiveTab = "optimist" | "pessimist" | "synthesis";
+
 type KnowledgeFile = {
   filename: string;
   content: string;
@@ -17,14 +17,22 @@ type KnowledgeFile = {
 export default function DebateApp() {
   const [question, setQuestion] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
-  const [debate, setDebate] = useState<DebateResponse | null>(null);
+
+  const [debate, setDebate] = useState<DebateResponse>({
+    optimist: "",
+    pessimist: "",
+    synthesis: "",
+  });
   const [activeTab, setActiveTab] = useState<ActiveTab>("synthesis");
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<{ [key in DebatePart]: boolean }>({
+    optimist: false,
+    pessimist: false,
+    synthesis: false,
+  });
   const [uploadMessage, setUploadMessage] = useState<string>("");
   const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
 
-  // Fetch knowledge files from backend
   const fetchKnowledgeFiles = async () => {
     try {
       const response = await axios.get<KnowledgeFile[]>(
@@ -36,27 +44,97 @@ export default function DebateApp() {
     }
   };
 
-  // Load knowledge files on component mount
   useEffect(() => {
     fetchKnowledgeFiles();
   }, []);
+
+  // fetch a single debate perspective
+  const fetchDebatePart = async (part: DebatePart): Promise<string> => {
+    if (!question.trim()) return "";
+
+    setIsLoading((prev) => ({ ...prev, [part]: true }));
+
+    try {
+      const response = await axios.post<string>(
+        `http://localhost:8000/debate/${part}`,
+        { question },
+        { headers: { "Content-Type": "application/json" } },
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching ${part}:`, error);
+      return "Failed to load perspective.";
+    } finally {
+      setIsLoading((prev) => ({ ...prev, [part]: false }));
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!question.trim()) return;
 
-    setIsLoading(true);
+    // Reset states
+    setDebate({
+      optimist: "",
+      pessimist: "",
+      synthesis: "",
+    });
+    setIsLoading({
+      optimist: true,
+      pessimist: true,
+      synthesis: true,
+    });
+
     try {
-      const response = await axios.post<DebateResponse>(
-        "http://localhost:8000/debate",
-        { question },
-        { headers: { "Content-Type": "application/json" } },
-      );
-      setDebate(response.data);
+      const [optimistResponse, pessimistResponse] = await Promise.all([
+        fetchDebatePart("optimist"),
+        fetchDebatePart("pessimist"),
+      ]);
+
+      setDebate((prev) => ({
+        ...prev,
+        optimist: optimistResponse,
+        pessimist: pessimistResponse,
+      }));
+
+      setIsLoading((prev) => ({ ...prev, synthesis: true }));
+      try {
+        const synthesisResponse = await axios.post<string>(
+          "http://localhost:8000/debate/synthesis",
+          {
+            question,
+            optimist_response: optimistResponse,
+            pessimist_response: pessimistResponse,
+          },
+          { headers: { "Content-Type": "application/json" } },
+        );
+
+        setDebate((prev) => ({
+          ...prev,
+          synthesis: synthesisResponse.data,
+        }));
+      } catch (error) {
+        console.error("Synthesis error:", error);
+        setDebate((prev) => ({
+          ...prev,
+          synthesis: "Failed to load synthesis.",
+        }));
+      } finally {
+        setIsLoading((prev) => ({ ...prev, synthesis: false }));
+      }
     } catch (error) {
       console.error("Debate error:", error);
-    } finally {
-      setIsLoading(false);
+      setDebate({
+        optimist: "Failed to load optimist perspective.",
+        pessimist: "Failed to load pessimist perspective.",
+        synthesis: "Failed to load synthesis.",
+      });
+      setIsLoading({
+        optimist: false,
+        pessimist: false,
+        synthesis: false,
+      });
     }
   };
 
@@ -73,7 +151,7 @@ export default function DebateApp() {
       });
       setUploadMessage(`${file.name} uploaded successfully!`);
       setTimeout(() => setUploadMessage(""), 3000);
-      fetchKnowledgeFiles(); // Refresh the knowledge base after upload
+      fetchKnowledgeFiles(); // Refresh knowledge base
     } catch (error) {
       console.error("Upload error:", error);
       setUploadMessage("Upload failed");
@@ -86,6 +164,7 @@ export default function DebateApp() {
 
   return (
     <div className="flex h-screen bg-gray-50">
+      {/* TODO: Move to separate components */}
       {/* Sidebar */}
       <div
         className={`${sidebarOpen ? "w-64" : "w-0"} transition-all duration-300 bg-white border-r border-gray-200 overflow-hidden`}
@@ -106,7 +185,6 @@ export default function DebateApp() {
             </svg>
             Knowledge Base
           </h2>
-
           <div className="flex-1 overflow-y-auto">
             {knowledgeFiles.length > 0 ? (
               <div className="space-y-2">
@@ -183,7 +261,7 @@ export default function DebateApp() {
             </svg>
           </button>
           <h1 className="text-xl font-semibold text-gray-800">
-            🌳 Agent Forest
+            🌳 Agent Forest: A Multi-Agent Decision Engine
           </h1>
         </header>
 
@@ -246,7 +324,7 @@ export default function DebateApp() {
                   <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
                   <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
                 </svg>
-                Start Debate
+                Start Simulation
               </h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="flex space-x-4">
@@ -258,43 +336,18 @@ export default function DebateApp() {
                   />
                   <button
                     type="submit"
-                    disabled={!question.trim() || isLoading}
+                    disabled={!question.trim()}
                     className="px-4 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center"
                   >
-                    {isLoading ? (
-                      <>
-                        <svg
-                          className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                        Debating...
-                      </>
-                    ) : (
-                      "Start Debate"
-                    )}
+                    Start Debate
                   </button>
                 </div>
               </form>
             </div>
 
             {/* Results */}
-            {debate && (
+            {Object.values(debate).some((val) => val) ||
+            Object.values(isLoading).some((val) => val) ? (
               <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                 <div className="border-b border-gray-200">
                   <nav className="flex -mb-px">
@@ -325,7 +378,9 @@ export default function DebateApp() {
                         Optimist Perspective
                       </h3>
                       <div className="text-gray-700 whitespace-pre-line">
-                        {debate.optimist}
+                        {isLoading.optimist
+                          ? "Loading optimist perspective..."
+                          : debate.optimist}
                       </div>
                     </div>
                   )}
@@ -335,7 +390,9 @@ export default function DebateApp() {
                         Pessimist Perspective
                       </h3>
                       <div className="text-gray-700 whitespace-pre-line">
-                        {debate.pessimist}
+                        {isLoading.pessimist
+                          ? "Loading pessimist perspective..."
+                          : debate.pessimist}
                       </div>
                     </div>
                   )}
@@ -345,13 +402,15 @@ export default function DebateApp() {
                         Final Recommendation
                       </h3>
                       <div className="text-gray-700 whitespace-pre-line">
-                        {debate.synthesis}
+                        {isLoading.synthesis
+                          ? "Loading final recommendation..."
+                          : debate.synthesis}
                       </div>
                     </div>
                   )}
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </main>
       </div>
