@@ -17,7 +17,6 @@ def format_context(search_results: List[Dict]) -> str:
 
 
 def parse_uploaded_file(uploaded_file):
-    """Parse uploaded file based on its type"""
     try:
         if uploaded_file.name.endswith(".json"):
             return json.load(uploaded_file)
@@ -28,7 +27,6 @@ def parse_uploaded_file(uploaded_file):
 
 
 def parse_synthesis(text: str) -> dict:
-    """Parse the structured synthesis response into components"""
     sections = {
         "summary": "",
         "opportunities": [],
@@ -54,6 +52,8 @@ def parse_synthesis(text: str) -> dict:
     sections["opportunities"] = extract_section("Opportunities")
     sections["risks"] = extract_section("Risks")
     sections["actions"] = extract_section("Action Plan")
+    # TODO: use for quantifying
+    # sections["bullet_count"] = count_bullet_points(text)
 
     if "[Recommendation]" in text:
         rec_text = text.split("[Recommendation]")[1].split("\n")[0].strip()
@@ -95,4 +95,3 @@ def extract_sections(text):
             break
 
     return sections
-

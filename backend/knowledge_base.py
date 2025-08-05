@@ -19,7 +19,6 @@ class KnowledgeBase:
         self._load_documents()
 
     def _read_file_content(self, path: Path):
-        """Safe file reading with encoding detection"""
         try:
             with open(path, "rb") as f:
                 raw_data = f.read()
@@ -51,10 +50,13 @@ class KnowledgeBase:
             if filepath.is_file():
                 content = self._read_file_content(filepath)
                 embedding = embedder.encode(str(content), convert_to_tensor=True)
+                # TODO: incorporate this across
+                # file_size = os.path.getsize(filepath)
                 self.documents.append(
                     {
                         "filename": filepath.name,
                         "content": content,
+                        # "size_bytes": file_size
                     }
                 )
                 embeddings_list.append(embedding)

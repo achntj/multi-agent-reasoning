@@ -35,7 +35,6 @@ kb = KnowledgeBase()
 
 @app.get("/knowledge")
 async def get_knowledge():
-    """Return list of all knowledge base files with safe content reading"""
     files = []
     for filename in os.listdir("knowledge_base"):
         path = os.path.join("knowledge_base", filename)
@@ -78,6 +77,7 @@ async def upload_file(file: UploadFile = File(...)):
         elif file.filename.endswith(".json"):
             content = json.loads(content.decode("utf-8"))
         kb.add_document(file.filename, content)
+        print(f"Successfully uploaded and processed file: {file.filename}")
         return {"filename": file.filename, "status": "success", "size": len(content)}
     except Exception as e:
         print(f"Upload error: {str(e)}")
