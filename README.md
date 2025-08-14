@@ -1,5 +1,7 @@
 # Strategic Decision Simulator
 
+![Screenshot of Home Page](/HomePage.png)
+
 A multi-agent AI system that simulates strategic debate to help you make
 better decisions. Upload your context (Knowledge Base), ask a question, and
 Optimist, Pessimist, and Synthesizer agents will communicate to provide a
